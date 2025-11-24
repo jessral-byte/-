@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>國學小學堂：對聯大冒險</title>
+    <!-- 引入 React 和 Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 錯誤捕捉 (若發生錯誤會顯示在螢幕上) -->
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            var debugDiv = document.getElementById('debug-error');
+            if (debugDiv) {
+                debugDiv.style.display = 'block';
+                debugDiv.innerHTML += '<strong>發生錯誤：</strong> ' + msg + '<br><small>行數: ' + line + '</small><br><br>';
+            }
+        };
+    </script>
+
+    <!-- 設定中文字體 -->
+    <style>
+        body { font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; background-color: #FFF7ED; }
+        .font-serif { font-family: "PMingLiU", "LiSong Pro", serif; }
+        /* 直書設定 */
+        .writing-vertical-rl { writing-mode: vertical-rl; }
+        /* 動畫設定 */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(-5%); }
+            50% { transform: translateY(5%); }
+        }
+        .animate-bounce-slow { animation: bounce-slow 3s infinite; }
+        .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 圖片容器樣式 */
+        .img-placeholder {
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 錯誤訊息顯示區 -->
+    <div id="debug-error" style="display:none; background:#fee2e2; color:#991b1b; padding:20px; margin:20px; border:2px solid #f87171; border-radius:10px;"></div>
+
+    <div id="root">
+        <div style="height: 100vh; display: flex; justify-content: center; align-items: center; color: #ea580c; font-size: 1.5rem; font-weight: bold;">
+            正在載入遊戲中...<br>
+            <span style="font-size: 1rem; color: #666; font-weight: normal; margin-top: 10px;">(如果很久沒反應，請檢查網路是否連線)</span>
+        </div>
+    </div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 簡易圖示元件 (取代 Lucide) ---
+        const Icon = ({ path, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {path}
+            </svg>
+        );
+
+        const BookOpen = (props) => <Icon {...props} path={<><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></>} />;
+        const Star = (props) => <Icon {...props} path={<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />} />;
+        const Trophy = (props) => <Icon {...props} path={<><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></>} />;
+        const ArrowRight = (props) => <Icon {...props} path={<><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></>} />;
+        const CheckCircle = (props) => <Icon {...props} path={<><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>} />;
+        const XCircle = (props) => <Icon {...props} path={<><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></>} />;
+        const Award = (props) => <Icon {...props} path={<><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></>} />;
+        const Home = (props) => <Icon {...props} path={<><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>} />;
+        const Upload = (props) => <Icon {...props} path={<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>} />;
+
+        // --- 資料庫 ---
+
+        // Google Drive 直接連結
+        const DEFAULT_IMAGE_SRC = "https://drive.google.com/uc?export=view&id=1LuRU7Cwc2iQVm_dvpidANbCXDmhNfwNa"; 
+
+        const LESSON_DATA = [
+            {
+                id: 1,
+                title: "認識對聯三兄弟",
+                content: "對聯是中國傳統文化，主要分為三種：\n\n1. **春聯**：過年貼的，紅色喜氣，祈求好運。\n(關鍵字：春、福、歲、年)\n\n2. **賀聯**：慶祝喜事用的，如結婚、壽宴、開業。\n(關鍵字：婚、壽、業、喜)\n\n3. **廟祠聯**：貼在廟宇，歌頌神明或祈求國泰民安。\n(關鍵字：神、恩、風調雨順)",
+                imageType: "types" 
+            },
+            {
+                id: 2,
+                title: "平仄規則大解密",
+                content: "對聯最重視「平仄」，這決定了哪張貼右邊(上聯)，哪張貼左邊(下聯)。\n\n口訣：**「仄起平收」**\n\n* **上聯 (右邊)**：最後一個字是 **仄聲** (注音三、四聲)。\n* **下聯 (左邊)**：最後一個字是 **平聲** (注音一、二聲)。\n\n例如：「天增歲月人增**壽**(四聲/仄)」，是上聯！",
+                imageType: "rules"
+            },
+            {
+                id: 3,
+                title: "貼對聯的時機",
+                content: "貼錯可是會鬧笑話的喔！\n\n* **春聯**：除夕當天早上6點到中午12點貼最好。\n* **賀聯**：喜事發生前或當天貼。\n* **面對大門**：右邊貼上聯，左邊貼下聯，上面貼橫批。",
+                imageType: "timing"
+            }
+        ];
+
+        const QUIZ_POOL = [
+            { q: "對聯的上聯，最後一個字通常是什麼聲調？", options: ["平聲 (一、二聲)", "仄聲 (三、四聲)", "輕聲"], ans: 1 },
+            { q: "「爆竹一聲除舊歲」這句詩最後一個字「歲」是四聲，所以它是？", options: ["上聯", "下聯", "橫批"], ans: 0 },
+            { q: "看到「新婚大喜」四個字，這屬於哪種對聯？", options: ["春聯", "賀聯", "廟祠聯"], ans: 1 },
+            { q: "貼對聯時，當你面對大門，上聯應該貼在哪一邊？", options: ["左邊", "右邊", "中間"], ans: 1 },
+            { q: "「國泰民安」這類祈求國家安定的詞語，最常出現在哪裡？", options: ["婚禮", "廟宇", "商店"], ans: 1 },
+            { q: "下列哪一個關鍵字最常出現在「春聯」中？", options: ["壽", "春", "醫"], ans: 1 },
+            { q: "「仄起平收」中的「平收」指的是什麼？", options: ["上聯最後一字平聲", "下聯最後一字平聲", "橫批最後一字平聲"], ans: 1 },
+            { q: "除夕當天貼春聯的最佳時段是？", options: ["半夜12點", "早上6點到中午12點", "下午4點後"], ans: 1 },
+        ];
+
+        const LEVEL_1_POOL = [
+            { text: "一元復始", type: "上聯", tone: "仄 (三聲)" },
+            { text: "萬象更新", type: "下聯", tone: "平 (一聲)" },
+            { text: "三陽開泰", type: "上聯", tone: "仄 (四聲)" },
+            { text: "五福臨門", type: "下聯", tone: "平 (二聲)" },
+            { text: "春臨大地", type: "上聯", tone: "仄 (四聲)" },
+            { text: "福滿人間", type: "下聯", tone: "平 (一聲)" },
+            { text: "源遠流長", type: "下聯", tone: "平 (二聲)" },
+            { text: "根深葉茂", type: "上聯", tone: "仄 (四聲)" },
+            { text: "海闊魚躍", type: "上聯", tone: "仄 (四聲)" },
+            { text: "天高鳥飛", type: "下聯", tone: "平 (一聲)" },
+            { text: "風調雨順", type: "上聯", tone: "仄 (四聲)" },
+            { text: "國泰民安", type: "下聯", tone: "平 (一聲)" }
+        ];
+
+        const LEVEL_2_POOL = [
+            { top: "天增歲月人增壽", bottom: "春滿乾坤福滿門", hint: "春聯" },
+            { top: "爆竹一聲除舊歲", bottom: "桃符萬戶更新春", hint: "春聯" },
+            { top: "生意興隆通四海", bottom: "財源廣進達三江", hint: "賀聯(開業)" },
+            { top: "福如東海長流水", bottom: "壽比南山不老松", hint: "賀聯(祝壽)" },
+            { top: "萬里和風生柳葉", bottom: "五陵春色泛桃花", hint: "春聯" },
+            { top: "春風春雨春常在", bottom: "喜日喜人喜事多", hint: "春聯" },
+            { top: "有求必應威靈顯", bottom: "無感不通惠澤長", hint: "廟祠聯" },
+            { top: "書山有路勤為徑", bottom: "學海無涯苦作舟", hint: "勵志(書房)" },
+            { top: "門迎春夏秋冬福", bottom: "戶納東西南北財", hint: "春聯(招財)" }
+        ];
+
+        const LEVEL_3_POOL = [
+            { q: "「白首齊眉鴛鴦比翼，青陽啟瑞桃李同心」適用於？", options: ["賀新婚", "賀開業", "賀壽", "輓聯"], ans: 0 },
+            { q: "「慈竹風和，一堂春滿」適用於？", options: ["男壽", "女壽", "雙壽", "生子"], ans: 1 }, 
+            { q: "「裕國足民，人壽年豐」最適合貼在哪裡？", options: ["醫院", "米店/糧行", "書局", "警察局"], ans: 1 },
+            { q: "「妙手回春，杏林春暖」適用於？", options: ["花店", "醫院/診所", "學校", "餐廳"], ans: 1 },
+            { q: "下列哪一副對聯適合貼在書房？", options: ["生意興隆通四海", "風調雨順兆豐年", "室雅何須大，花香不在多", "客至如歸"], ans: 2 },
+            { q: "「雖是毫末技藝，卻是頂上功夫」這副對聯是指哪個行業？", options: ["帽子店", "理髮廳", "美容院", "眼鏡行"], ans: 1 },
+            { q: "「藏古今學術，聚天地精華」最適合貼在哪裡？", options: ["銀行", "茶館", "圖書館/書店", "古董店"], ans: 2 },
+            { q: "「但願世間人無病，何妨架上藥生塵」是哪個行業的仁心？", options: ["水果行", "健身房", "藥局", "禮儀公司"], ans: 2 },
+            { q: "「四面荷花三面柳，一城山色半城湖」描寫的是哪個季節？", options: ["春季", "夏季", "秋季", "冬季"], ans: 1 },
+            { q: "「近水樓台先得月，向陽花木早逢春」中，「向陽花木」常比喻？", options: ["得到特別的恩惠或機遇", "勤勞的人", "美麗的風景", "時間的流逝"], ans: 0 }
+        ];
+
+        const shuffleArray = (array) => {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        };
+
+        // --- 主程式 Component ---
+
+        function CoupletGameApp() {
+            const [screen, setScreen] = useState('home'); 
+            const [unlockedLevels, setUnlockedLevels] = useState([false, false, false]); 
+            const [quizPassed, setQuizPassed] = useState(false);
+            const [currentLevel, setCurrentLevel] = useState(1);
+            const [score, setScore] = useState(0);
+            const [playerName, setPlayerName] = useState("");
+            
+            const [homeImage, setHomeImage] = useState(DEFAULT_IMAGE_SRC);
+            const [imageError, setImageError] = useState(false); 
+            const fileInputRef = useRef(null);
+            
+            const [gameQuestions, setGameQuestions] = useState([]);
+            const [currentQIndex, setCurrentQIndex] = useState(0);
+            const [feedback, setFeedback] = useState(null); 
+            const [showExplanation, setShowExplanation] = useState(false);
+
+            // 初始化圖片
+            useEffect(() => {
+                setHomeImage(DEFAULT_IMAGE_SRC);
+                setImageError(false);
+            }, []);
+
+            const handleImageUpload = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const imageUrl = URL.createObjectURL(file);
+                    setHomeImage(imageUrl);
+                    setImageError(false);
+                }
+            };
+
+            const triggerFileInput = () => {
+                fileInputRef.current.click();
+            };
+            
+            const startTeaching = () => {
+                setScreen('teach');
+            };
+
+            const startQuiz = () => {
+                const questions = shuffleArray(QUIZ_POOL).slice(0, 3);
+                setGameQuestions(questions);
+                setCurrentQIndex(0);
+                setScore(0);
+                setScreen('quiz');
+            };
+
+            const startGame = (level) => {
+                setCurrentLevel(level);
+                setScore(0);
+                setCurrentQIndex(0);
+                setFeedback(null);
+                setShowExplanation(false);
+
+                let questions = [];
+                if (level === 1) {
+                    const raw = shuffleArray(LEVEL_1_POOL).slice(0, 5);
+                    questions = raw.map(item => ({...item, qType: 'identity'}));
+                } else if (level === 2) {
+                    const raw = shuffleArray(LEVEL_2_POOL).slice(0, 5);
+                    questions = raw.map(item => {
+                        const wrongOptions = shuffleArray(LEVEL_2_POOL.filter(x => x.top !== item.top)).slice(0, 3).map(x => x.bottom);
+                        const options = shuffleArray([item.bottom, ...wrongOptions]);
+                        return { ...item, options, qType: 'match' };
+                    });
+                } else if (level === 3) {
+                    questions = shuffleArray(LEVEL_3_POOL).slice(0, 5);
+                }
+                
+                setGameQuestions(questions);
+                setScreen('game');
+            };
+
+            const RenderHome = () => (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-orange-50 p-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl border-4 border-red-500 max-w-lg w-full text-center relative overflow-hidden">
+                        
+                        <div className="absolute top-0 left-4 w-12 h-24 bg-red-600 rounded-b-lg flex flex-col items-center justify-center text-yellow-100 font-serif font-bold shadow-md z-10">
+                            <div>對</div><div>聯</div>
+                        </div>
+                        <div className="absolute top-0 right-4 w-12 h-24 bg-red-600 rounded-b-lg flex flex-col items-center justify-center text-yellow-100 font-serif font-bold shadow-md z-10">
+                            <div>大</div><div>師</div>
+                        </div>
+
+                        <h1 className="text-4xl font-extrabold text-red-600 mt-16 mb-4 tracking-wider">國學小學堂</h1>
+                        
+                        <div 
+                            className={`w-full rounded-xl mb-6 overflow-hidden border-2 border-red-200 relative bg-gray-100 group shadow-md cursor-pointer hover:border-red-400 transition ${imageError ? 'img-placeholder' : ''}`}
+                            onClick={triggerFileInput}
+                            title="點擊更換圖片"
+                        >
+                            <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+
+                            {!imageError ? (
+                                <div className="relative">
+                                    <img 
+                                        src={homeImage} 
+                                        alt="國學教室情境圖" 
+                                        className="w-full h-auto object-contain transform transition duration-700"
+                                        onError={() => setImageError(true)}
+                                        referrerPolicy="no-referrer"
+                                    />
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition text-white font-bold">
+                                        <Upload className="mr-2" /> 點擊上傳/更換圖片
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="w-full h-56 bg-blue-100 flex items-center justify-center relative overflow-hidden group">
+                                    <div className="absolute bottom-0 w-full h-1/3 bg-orange-200"></div>
+                                    <div className="z-10 flex flex-col items-center animate-bounce-slow">
+                                        <div className="text-7xl mb-2 filter drop-shadow-lg">👩‍🏫</div>
+                                        <p className="font-bold text-gray-700 bg-white/80 px-3 py-1 rounded-full text-sm">圖片載入失敗，點擊上傳</p>
+                                    </div>
+                                    <div className="absolute top-4 bg-[#2F4F4F] w-3/4 h-24 rounded-lg border-4 border-[#8B4513] opacity-90 flex items-center justify-center shadow-inner">
+                                        <span className="text-white font-serif text-lg tracking-widest border-b border-dashed border-gray-400 pb-1">春聯・賀聯・廟祠聯</span>
+                                    </div>
+                                    <div className="absolute inset-0 bg-black/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                        <span className="bg-white text-gray-800 px-4 py-2 rounded-full font-bold shadow">選擇圖片</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-4">
+                            <button onClick={startTeaching} className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 flex items-center justify-center text-xl">
+                                <BookOpen className="mr-2" /> 開始上課
+                            </button>
+                            
+                            <button 
+                                onClick={() => setScreen('gameSelect')} 
+                                disabled={!quizPassed}
+                                className={`w-full font-bold py-4 px-6 rounded-2xl shadow-lg transform transition flex items-center justify-center text-xl ${quizPassed ? 'bg-red-500 hover:bg-red-600 hover:scale-105 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                            >
+                                <Trophy className="mr-2" /> 挑戰關卡 {quizPassed ? '' : '(需先通過測驗)'}
+                            </button>
+
+                            {quizPassed && (
+                                <button onClick={() => setScreen('certificate')} className="w-full bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 px-6 rounded-2xl shadow-md transform transition hover:scale-105 flex items-center justify-center">
+                                    <Award className="mr-2" /> 領取獎狀
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const RenderTeach = () => {
+                const [step, setStep] = useState(0);
+                return (
+                    <div className="min-h-screen bg-orange-50 flex flex-col items-center p-4">
+                        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl overflow-hidden border-2 border-orange-200 mt-4">
+                            <div className="bg-blue-500 p-4 text-white text-center text-xl font-bold flex justify-between items-center">
+                                <span>第 {step + 1} 課：{LESSON_DATA[step].title}</span>
+                                <button onClick={() => setScreen('home')} className="text-sm bg-blue-700 px-3 py-1 rounded-full hover:bg-blue-800 transition">回首頁</button>
+                            </div>
+                            
+                            <div className="p-8 min-h-[400px] flex flex-col items-center justify-center">
+                                <div className="mb-8 text-9xl animate-bounce-slow filter drop-shadow-md">
+                                    {LESSON_DATA[step].imageType === 'types' && '🏮'}
+                                    {LESSON_DATA[step].imageType === 'rules' && '📝'}
+                                    {LESSON_DATA[step].imageType === 'timing' && '🚪'}
+                                </div>
+                                <div className="text-lg text-gray-700 leading-loose whitespace-pre-line text-left w-full bg-yellow-50 p-6 rounded-xl border border-yellow-200 shadow-inner">
+                                    {LESSON_DATA[step].content}
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-gray-50 flex justify-between items-center">
+                                <button disabled={step === 0} onClick={() => setStep(s => s - 1)} className={`px-6 py-2 rounded-xl font-bold transition ${step === 0 ? 'bg-gray-200 text-gray-400' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>上一頁</button>
+                                {step < LESSON_DATA.length - 1 ? (
+                                    <button onClick={() => setStep(s => s + 1)} className="px-6 py-2 rounded-xl font-bold bg-blue-500 text-white flex items-center hover:bg-blue-600 transition">下一頁 <ArrowRight className="ml-1" /></button>
+                                ) : (
+                                    <button onClick={startQuiz} className="px-6 py-2 rounded-xl font-bold bg-red-500 text-white flex items-center animate-pulse hover:bg-red-600 transition">參加隨堂考 <Star className="ml-1" /></button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const RenderQuiz = () => {
+                const question = gameQuestions[currentQIndex];
+                const handleAnswer = (idx) => {
+                    if (feedback) return;
+                    const isCorrect = idx === question.ans;
+                    setFeedback(isCorrect ? 'correct' : 'wrong');
+                    if (isCorrect) setScore(s => s + 1);
+                    setTimeout(() => {
+                        setFeedback(null);
+                        if (currentQIndex < gameQuestions.length - 1) {
+                            setCurrentQIndex(c => c + 1);
+                        } else {
+                            const finalScore = score + (isCorrect ? 1 : 0);
+                            if (finalScore === gameQuestions.length) {
+                                setQuizPassed(true);
+                                setUnlockedLevels([true, false, false]); 
+                                setScreen('quizSuccess');
+                            } else {
+                                setScreen('quizFail');
+                            }
+                        }
+                    }, 1000);
+                };
+                if (!question) return <div>Loading...</div>;
+                return (
+                    <div className="min-h-screen bg-green-50 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border-4 border-green-400 max-w-lg w-full">
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-2xl font-bold text-green-700">隨堂小測驗</h2>
+                                <span className="text-sm font-bold bg-green-100 text-green-800 px-3 py-1 rounded-full">{currentQIndex + 1} / {gameQuestions.length}</span>
+                            </div>
+                            <p className="text-center text-gray-500 mb-6">答對所有題目才能解鎖遊戲喔！</p>
+                            <div className="bg-green-50 p-6 rounded-xl mb-6 text-lg font-medium text-gray-800 border border-green-100 min-h-[100px] flex items-center justify-center">{question.q}</div>
+                            <div className="space-y-3">
+                                {question.options.map((opt, idx) => (
+                                    <button key={idx} onClick={() => handleAnswer(idx)} className={`w-full p-4 rounded-xl text-left text-lg font-bold border-2 transition-all duration-200 ${feedback === null ? 'bg-white border-gray-200 hover:border-green-400 hover:bg-green-50 hover:pl-6' : ''} ${feedback === 'correct' && idx === question.ans ? 'bg-green-500 text-white border-green-600 shadow-md transform scale-105' : ''} ${feedback === 'wrong' && idx !== question.ans ? 'opacity-40 grayscale' : ''} ${feedback === 'wrong' && idx === question.ans ? 'bg-green-500 text-white border-green-600' : ''} ${feedback === 'wrong' && idx !== question.ans && feedback ? 'bg-red-100 border-red-300' : ''}`}>{opt}</button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const RenderQuizResult = ({ success }) => (
+                <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full border-2 border-orange-100">
+                        <div className="text-7xl mb-4 animate-bounce">{success ? '🎉' : '😅'}</div>
+                        <h2 className="text-3xl font-bold mb-4 text-gray-800">{success ? '恭喜通過！' : '再接再厲！'}</h2>
+                        <p className="text-gray-600 mb-8 text-lg leading-relaxed">{success ? '你已經掌握了對聯的基礎知識，準備好挑戰關卡了嗎？' : '哎呀，有些題目答錯了，全對才能開始遊戲喔，再回去複習一下吧！'}</p>
+                        <div className="flex gap-4 justify-center">
+                            <button onClick={() => setScreen('home')} className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-3 rounded-xl font-bold transition">回首頁</button>
+                            {success ? <button onClick={() => setScreen('gameSelect')} className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg animate-pulse transition">去闖關</button> : <button onClick={startTeaching} className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow transition">複習課程</button>}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const RenderGameSelect = () => (
+                <div className="min-h-screen bg-blue-50 flex flex-col items-center p-4">
+                    <h2 className="text-3xl font-extrabold text-blue-800 mt-8 mb-6">選擇挑戰難度</h2>
+                    <div className="grid gap-6 w-full max-w-md">
+                        <div onClick={() => startGame(1)} className="bg-white p-6 rounded-2xl shadow-lg border-b-4 border-green-500 cursor-pointer hover:translate-y-[-4px] hover:shadow-xl transition relative group overflow-hidden">
+                            <div className="absolute right-0 top-0 w-24 h-24 bg-green-100 rounded-bl-full -mr-4 -mt-4 z-0 opacity-50"></div>
+                            <div className="flex justify-between items-center relative z-10">
+                                <div><h3 className="text-xl font-bold text-gray-800">初級學徒 (五言)</h3><p className="text-sm text-gray-500 mt-1">分辨上聯與下聯 (看平仄)</p></div>
+                                <span className="text-4xl">🌱</span>
+                            </div>
+                            <div className="absolute top-2 right-2 z-10"><span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">已解鎖</span></div>
+                        </div>
+                        <div onClick={() => unlockedLevels[0] ? startGame(2) : null} className={`bg-white p-6 rounded-2xl shadow-lg border-b-4 border-yellow-500 transition relative overflow-hidden ${unlockedLevels[0] ? 'cursor-pointer hover:translate-y-[-4px] hover:shadow-xl' : 'opacity-60 cursor-not-allowed grayscale'}`}>
+                            {unlockedLevels[0] && <div className="absolute right-0 top-0 w-24 h-24 bg-yellow-100 rounded-bl-full -mr-4 -mt-4 z-0 opacity-50"></div>}
+                            <div className="flex justify-between items-center relative z-10">
+                                <div><h3 className="text-xl font-bold text-gray-800">中級寫手 (七言)</h3><p className="text-sm text-gray-500 mt-1">上下聯配對挑戰</p></div>
+                                <span className="text-4xl">✍️</span>
+                            </div>
+                            {!unlockedLevels[0] && <div className="absolute inset-0 flex items-center justify-center bg-gray-100/60 backdrop-blur-[1px] rounded-2xl z-20"><span className="bg-gray-800 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">🔒 通過初級解鎖</span></div>}
+                        </div>
+                        <div onClick={() => unlockedLevels[1] ? startGame(3) : null} className={`bg-white p-6 rounded-2xl shadow-lg border-b-4 border-red-500 transition relative overflow-hidden ${unlockedLevels[1] ? 'cursor-pointer hover:translate-y-[-4px] hover:shadow-xl' : 'opacity-60 cursor-not-allowed grayscale'}`}>
+                            {unlockedLevels[1] && <div className="absolute right-0 top-0 w-24 h-24 bg-red-100 rounded-bl-full -mr-4 -mt-4 z-0 opacity-50"></div>}
+                            <div className="flex justify-between items-center relative z-10">
+                                <div><h3 className="text-xl font-bold text-gray-800">國學大師 (魔王)</h3><p className="text-sm text-gray-500 mt-1">使用場合、行業與季節</p></div>
+                                <span className="text-4xl">👹</span>
+                            </div>
+                            {!unlockedLevels[1] && <div className="absolute inset-0 flex items-center justify-center bg-gray-100/60 backdrop-blur-[1px] rounded-2xl z-20"><span className="bg-gray-800 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">🔒 通過中級解鎖</span></div>}
+                        </div>
+                        <button onClick={() => setScreen('home')} className="mt-4 text-gray-500 font-bold hover:text-gray-700 flex items-center justify-center"><Home className="mr-2"/> 返回首頁</button>
+                    </div>
+                </div>
+            );
+
+            const RenderGamePlay = () => {
+                const question = gameQuestions[currentQIndex];
+                if (!question) return <div>Loading...</div>;
+                const nextQuestion = () => {
+                    setFeedback(null);
+                    setShowExplanation(false);
+                    if (currentQIndex < gameQuestions.length - 1) {
+                        setCurrentQIndex(c => c + 1);
+                    } else {
+                        if (currentLevel === 1) setUnlockedLevels(prev => [prev[0], true, prev[2]]);
+                        else if (currentLevel === 2) setUnlockedLevels(prev => [prev[0], prev[1], true]);
+                        setScreen('levelComplete');
+                    }
+                };
+                const handleL1Answer = (guessType) => {
+                    if (feedback) return;
+                    const isCorrect = guessType === question.type;
+                    setFeedback(isCorrect ? 'correct' : 'wrong');
+                    if (isCorrect) setScore(s => s + 1);
+                    setShowExplanation(true);
+                };
+                const handleL2Answer = (text) => {
+                    if (feedback) return;
+                    const isCorrect = text === question.bottom;
+                    setFeedback(isCorrect ? 'correct' : 'wrong');
+                    if (isCorrect) setScore(s => s + 1);
+                    setShowExplanation(true);
+                };
+                const handleL3Answer = (idx) => {
+                    if (feedback) return;
+                    const isCorrect = idx === question.ans;
+                    setFeedback(isCorrect ? 'correct' : 'wrong');
+                    if (isCorrect) setScore(s => s + 1);
+                    setShowExplanation(true);
+                };
+
+                return (
+                    <div className="min-h-screen bg-red-50 flex flex-col items-center p-4">
+                        <div className="w-full max-w-lg">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="bg-white px-4 py-2 rounded-full shadow font-bold text-gray-700 flex items-center"><span className="mr-2 text-sm text-gray-400">關卡</span> {currentLevel}</div>
+                                <div className="bg-white px-4 py-2 rounded-full shadow font-bold text-orange-600 flex items-center"><span className="mr-2 text-sm text-gray-400">分數</span> {score}</div>
+                            </div>
+                            <div className="bg-white p-6 rounded-3xl shadow-xl border-2 border-red-100 min-h-[450px] flex flex-col justify-between relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-400 to-yellow-400"></div>
+                                <div className="flex-1 flex flex-col items-center justify-center mb-6">
+                                    {currentLevel === 1 && (
+                                        <>
+                                            <h3 className="text-gray-500 mb-4 font-bold text-lg">請問這句是上聯還是下聯？</h3>
+                                            <div className="bg-red-600 text-yellow-100 text-4xl font-serif font-bold py-8 px-6 writing-vertical-rl rounded-lg shadow-inner min-h-[240px] flex items-center justify-center tracking-widest border-4 border-red-700">{question.text}</div>
+                                            <div className="mt-6 text-sm bg-gray-100 px-4 py-2 rounded-full text-gray-500">提示：看最後一個字「<span className="font-bold text-red-600 text-lg">{question.text[question.text.length-1]}</span>」</div>
+                                        </>
+                                    )}
+                                    {currentLevel === 2 && (
+                                        <>
+                                            <h3 className="text-gray-500 mb-4 font-bold text-lg">請幫上聯找老婆（下聯）</h3>
+                                            <div className="flex gap-4 items-stretch h-[280px]">
+                                                <div className="bg-red-600 text-yellow-100 text-2xl font-serif font-bold py-6 px-4 writing-vertical-rl rounded-lg shadow-md tracking-widest border-2 border-red-700 flex items-center justify-center">{question.top}</div>
+                                                <div className="bg-gray-100 text-gray-400 text-2xl font-serif font-bold py-6 px-4 writing-vertical-rl rounded-lg border-2 border-dashed border-gray-400 flex items-center justify-center">?</div>
+                                            </div>
+                                        </>
+                                    )}
+                                    {currentLevel === 3 && (
+                                        <div className="w-full flex flex-col items-center">
+                                            <span className="text-4xl mb-4">🧙‍♂️</span>
+                                            <h3 className="text-xl font-bold text-gray-800 mb-6 bg-red-50 p-6 rounded-xl border border-red-100 w-full text-center leading-relaxed">{question.q}</h3>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="w-full space-y-3">
+                                    {currentLevel === 1 && !feedback && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button onClick={() => handleL1Answer('上聯')} className="bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold py-4 rounded-xl text-xl transition shadow-sm border-b-4 border-blue-200 hover:border-blue-300">上聯 (右)</button>
+                                            <button onClick={() => handleL1Answer('下聯')} className="bg-green-100 hover:bg-green-200 text-green-800 font-bold py-4 rounded-xl text-xl transition shadow-sm border-b-4 border-green-200 hover:border-green-300">下聯 (左)</button>
+                                        </div>
+                                    )}
+                                    {currentLevel === 2 && !feedback && (
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {question.options.map((opt, idx) => (
+                                                <button key={idx} onClick={() => handleL2Answer(opt)} className="bg-gray-50 hover:bg-red-50 border border-gray-200 hover:border-red-300 text-gray-800 font-serif font-bold py-3 px-4 rounded-xl text-lg text-left transition hover:shadow-md">{opt}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {currentLevel === 3 && !feedback && (
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {question.options.map((opt, idx) => (
+                                                <button key={idx} onClick={() => handleL3Answer(idx)} className="bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 text-gray-800 font-bold py-3 px-4 rounded-xl text-lg text-left transition hover:shadow-md">{opt}</button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {feedback && (
+                                        <div className="animate-fade-in-up">
+                                            <div className={`p-4 rounded-xl mb-4 flex items-center shadow-inner ${feedback === 'correct' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                {feedback === 'correct' ? <CheckCircle className="mr-3 w-8 h-8" /> : <XCircle className="mr-3 w-8 h-8" />}
+                                                <div>
+                                                    <p className="font-bold text-lg">{feedback === 'correct' ? '答對了！' : '答錯囉！'}</p>
+                                                    {currentLevel === 1 && <p className="text-sm mt-1">「{question.text[question.text.length-1]}」是{question.tone}，{question.tone.includes('仄') ? '仄起 (三四聲) 是上聯' : '平收 (一二聲) 是下聯'}。</p>}
+                                                    {currentLevel === 2 && <p className="text-sm mt-1">這是一副{question.hint}。</p>}
+                                                </div>
+                                            </div>
+                                            <button onClick={nextQuestion} className="w-full bg-gray-800 text-white font-bold py-4 rounded-xl hover:bg-gray-900 transition flex justify-center items-center shadow-lg transform active:scale-95">下一題 <ArrowRight className="ml-2"/></button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const RenderLevelComplete = () => {
+                const passRate = score / gameQuestions.length;
+                const isPass = passRate >= 0.6;
+                return (
+                    <div className="min-h-screen bg-yellow-50 flex items-center justify-center p-4">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full border-4 border-yellow-400">
+                            <div className="text-8xl mb-6 filter drop-shadow-md animate-bounce">{isPass ? '🏆' : '💪'}</div>
+                            <h2 className="text-3xl font-bold mb-2 text-gray-800">{isPass ? '挑戰成功！' : '挑戰失敗'}</h2>
+                            <div className="my-6">
+                                <p className="text-gray-500 text-sm mb-1">本次得分</p>
+                                <p className="text-5xl font-black text-blue-600">{score} <span className="text-2xl text-gray-400 font-normal">/ {gameQuestions.length}</span></p>
+                            </div>
+                            {isPass && currentLevel < 3 && <div className="bg-green-100 text-green-700 p-4 rounded-xl mb-6 font-bold flex items-center justify-center"><Star className="mr-2 text-yellow-500 fill-current"/> 下一關已解鎖！</div>}
+                            {isPass && currentLevel === 3 && <div className="bg-red-100 text-red-700 p-4 rounded-xl mb-6 font-bold text-lg">太強了！你是真正的國學大師！</div>}
+                            <div className="space-y-3">
+                                <button onClick={() => setScreen('gameSelect')} className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow hover:bg-blue-600 transition">回到關卡列表</button>
+                                {!isPass && <button onClick={() => startGame(currentLevel)} className="w-full bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition">再試一次</button>}
+                                {isPass && currentLevel === 3 && <button onClick={() => setScreen('certificate')} className="w-full bg-yellow-400 text-yellow-900 py-3 rounded-xl font-bold shadow-lg hover:bg-yellow-500 animate-pulse border-b-4 border-yellow-600 active:border-b-0 active:mt-1">領取榮譽獎狀</button>}
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const RenderCertificate = () => {
+                const handlePrint = () => window.print();
+                return (
+                    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4 overflow-auto">
+                        <h2 className="text-2xl font-bold text-gray-700 mb-4 print:hidden">恭喜完成挑戰！</h2>
+                        <div className="bg-white p-4 rounded-xl shadow mb-6 w-full max-w-md print:hidden">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">輸入你的名字：</label>
+                            <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="王小明" className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none" />
+                        </div>
+                        <div className="bg-[#FFFBF0] border-[16px] border-double border-[#8B4513] p-8 max-w-2xl w-full text-center relative shadow-2xl print:shadow-none print:w-full print:h-screen print:border-8">
+                            <div className="absolute top-0 left-0 border-t-[40px] border-l-[40px] border-transparent border-t-red-800 border-l-red-800"></div>
+                            <div className="absolute top-0 right-0 border-t-[40px] border-r-[40px] border-transparent border-t-red-800 border-r-red-800"></div>
+                            <div className="absolute bottom-0 left-0 border-b-[40px] border-l-[40px] border-transparent border-b-red-800 border-l-red-800"></div>
+                            <div className="absolute bottom-0 right-0 border-b-[40px] border-r-[40px] border-transparent border-b-red-800 border-r-red-800"></div>
+                            <div className="py-8 border-4 border-[#DAA520] h-full flex flex-col justify-center items-center">
+                                <h1 className="text-5xl font-serif font-bold text-red-700 mb-8 tracking-widest">榮譽獎狀</h1>
+                                <p className="text-xl text-gray-800 mb-4 font-serif">茲證明</p>
+                                <p className="text-4xl font-bold text-black mb-6 font-serif border-b-2 border-gray-300 pb-2 px-8 min-w-[200px]">{playerName || "____________"}</p>
+                                <p className="text-xl text-gray-800 mb-8 font-serif leading-relaxed px-8">於「對聯大冒險」遊戲中，<br/>展現卓越的國學造詣，<br/>成功通過三道難關，特頒此狀以資鼓勵。</p>
+                                <div className="flex justify-around w-full mt-8">
+                                    <div className="text-center">
+                                        <div className="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center text-white font-bold border-4 border-yellow-400 shadow-inner mx-auto mb-2"><span className="text-3xl">印</span></div>
+                                        <p className="text-sm text-gray-500">國學小學堂</p>
+                                    </div>
+                                    <div className="text-right flex flex-col justify-end"><p className="text-lg font-serif">日期：{new Date().toLocaleDateString()}</p></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-8 flex gap-4 print:hidden">
+                            <button onClick={() => setScreen('home')} className="bg-gray-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-600 transition">回首頁</button>
+                            <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg flex items-center hover:bg-blue-700 transition">下載/列印獎狀 <Award className="ml-2"/></button>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="font-sans text-gray-800">
+                   {/* Global Audio Toggle could go here */}
+                   {screen === 'home' && <RenderHome />}
+                   {screen === 'teach' && <RenderTeach />}
+                   {screen === 'quiz' && <RenderQuiz />}
+                   {screen === 'quizFail' && <RenderQuizResult success={false} />}
+                   {screen === 'quizSuccess' && <RenderQuizResult success={true} />}
+                   {screen === 'gameSelect' && <RenderGameSelect />}
+                   {screen === 'game' && <RenderGamePlay />}
+                   {screen === 'levelComplete' && <RenderLevelComplete />}
+                   {screen === 'certificate' && <RenderCertificate />}
+                </div>
+            );
+        }
+
+        // 確保 DOM 載入後再執行 React
+        const rootElement = document.getElementById('root');
+        if (rootElement) {
+            const root = ReactDOM.createRoot(rootElement);
+            root.render(<CoupletGameApp />);
+        } else {
+            document.body.innerHTML = "錯誤：找不到 root 元素，請重新整理頁面";
+        }
+
+    </script>
+</body>
+</html>
